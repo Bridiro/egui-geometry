@@ -8,7 +8,6 @@ struct BezierCurve {
     line_color: Color32,
     point_color: Color32,
     selected_point: Option<usize>,
-    show_controls: bool,
     zoom: f32,
     pan: Pos2,
 }
@@ -23,7 +22,6 @@ impl Default for BezierCurve {
             line_color: Color32::WHITE,
             point_color: Color32::WHITE,
             selected_point: None,
-            show_controls: true,
             zoom: 1.0,
             pan: Pos2::ZERO,
         }
@@ -32,77 +30,75 @@ impl Default for BezierCurve {
 
 impl eframe::App for BezierCurve {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if self.show_controls {
-            egui::TopBottomPanel::top("controls").show(ctx, |ui| {
-                ui.group(|ui| {
-                    ui.set_height(70.0);
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        ui.label("Color of the Curve:");
-                        ui.color_edit_button_srgba(&mut self.line_color);
+        egui::TopBottomPanel::top("controls").show(ctx, |ui| {
+            ui.group(|ui| {
+                ui.set_height(70.0);
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.label("Color of the Curve:");
+                    ui.color_edit_button_srgba(&mut self.line_color);
 
-                        ui.separator();
+                    ui.separator();
 
-                        ui.label("Color of the Control Points:");
-                        ui.color_edit_button_srgba(&mut self.point_color);
+                    ui.label("Color of the Control Points:");
+                    ui.color_edit_button_srgba(&mut self.point_color);
 
-                        ui.separator();
+                    ui.separator();
 
-                        ui.vertical(|ui| {
-                            if ui.button("+").clicked() {
-                                let half_diff = (self.points[self.points.len() - 1]
-                                    - self.points[self.points.len() - 2])
-                                    / 2.0;
-                                let p = Pos2::new(
-                                    self.points[self.points.len() - 1].x + half_diff.x,
-                                    self.points[self.points.len() - 1].y + half_diff.y,
-                                );
-                                let p1 = Pos2::new(p.x + half_diff.x, p.y + half_diff.y);
-                                self.points.push(p);
-                                self.points.push(p1);
+                    ui.vertical(|ui| {
+                        if ui.button("+").clicked() {
+                            let half_diff = (self.points[self.points.len() - 1]
+                                - self.points[self.points.len() - 2])
+                                / 2.0;
+                            let p = Pos2::new(
+                                self.points[self.points.len() - 1].x + half_diff.x,
+                                self.points[self.points.len() - 1].y + half_diff.y,
+                            );
+                            let p1 = Pos2::new(p.x + half_diff.x, p.y + half_diff.y);
+                            self.points.push(p);
+                            self.points.push(p1);
+                        }
+
+                        if ui.button("-").clicked() {
+                            if (self.points.len() - 2) >= 3 {
+                                self.points.pop();
+                                self.points.pop();
                             }
+                        }
+                    });
 
-                            if ui.button("-").clicked() {
-                                if (self.points.len() - 2) >= 3 {
-                                    self.points.pop();
-                                    self.points.pop();
+                    ui.separator();
+
+                    ui.vertical(|ui| {
+                        ui.label("Edit Coordinates of the Control Points:");
+
+                        if let Some(point_index) = self.selected_point {
+                            let mut point = self.points[point_index];
+
+                            ui.horizontal(|ui| {
+                                ui.label("X:");
+                                let mut x_str = point.x.to_string();
+                                if ui.add(TextEdit::singleline(&mut x_str)).changed() {
+                                    if let Ok(x) = x_str.parse() {
+                                        point.x = x;
+                                    }
                                 }
-                            }
-                        });
-
-                        ui.separator();
-
-                        ui.vertical(|ui| {
-                            ui.label("Edit Coordinates of the Control Points:");
-
-                            if let Some(point_index) = self.selected_point {
-                                let mut point = self.points[point_index];
-
-                                ui.horizontal(|ui| {
-                                    ui.label("X:");
-                                    let mut x_str = point.x.to_string();
-                                    if ui.add(TextEdit::singleline(&mut x_str)).changed() {
-                                        if let Ok(x) = x_str.parse() {
-                                            point.x = x;
-                                        }
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Y:");
+                                let mut y_str = point.y.to_string();
+                                if ui.add(TextEdit::singleline(&mut y_str)).changed() {
+                                    if let Ok(y) = y_str.parse() {
+                                        point.y = y;
                                     }
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label("Y:");
-                                    let mut y_str = point.y.to_string();
-                                    if ui.add(TextEdit::singleline(&mut y_str)).changed() {
-                                        if let Ok(y) = y_str.parse() {
-                                            point.y = y;
-                                        }
-                                    }
-                                });
-                            } else {
-                                ui.label("Select a point to edit its coordinates.");
-                            }
-                        });
+                                }
+                            });
+                        } else {
+                            ui.label("Select a point to edit its coordinates.");
+                        }
                     });
                 });
             });
-        }
+        });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let rect = ui.min_rect();
