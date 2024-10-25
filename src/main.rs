@@ -64,6 +64,16 @@ impl eframe::App for BezierCurve {
                                 self.points.pop();
                             }
                         }
+
+                        if ui.button("Reset").clicked() {
+                            self.points = vec![
+                                Pos2::new(50.0, 400.0),
+                                Pos2::new(200.0, 200.0),
+                                Pos2::new(350.0, 400.0),
+                            ];
+                            self.zoom = 1.0;
+                            self.pan = Pos2::ZERO;
+                        }
                     });
 
                     ui.separator();
