@@ -3,7 +3,6 @@ mod cartesian;
 
 use eframe::egui::Key;
 
-#[allow(dead_code)]
 enum AppScene {
     Bezier(bezier::BezierCurve),
     Cartesian(cartesian::Cartesian),
