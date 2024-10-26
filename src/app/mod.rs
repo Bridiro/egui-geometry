@@ -1,48 +1,52 @@
 mod bezier;
 mod cartesian;
 
-use eframe::egui::Key;
-
-#[allow(dead_code)]
-enum AppScene {
-    Bezier(bezier::BezierCurve),
-    Cartesian(cartesian::Cartesian),
+enum Scene {
+    Bezier,
+    Cartesian,
 }
 
 pub struct App {
-    scene: AppScene,
+    bezier: bezier::BezierCurve,
+    cartesian: cartesian::Cartesian,
+    scene: Scene,
 }
 
 impl App {
-    fn new(scene: AppScene) -> Self {
-        Self { scene }
+    fn new(bezier: bezier::BezierCurve, cartesian: cartesian::Cartesian, scene: Scene) -> Self {
+        Self {
+            bezier,
+            cartesian,
+            scene,
+        }
     }
 }
 
 impl Default for App {
     fn default() -> Self {
-        Self::new(AppScene::Bezier(bezier::BezierCurve::default()))
+        let bez = bezier::BezierCurve::default();
+        let cart = cartesian::Cartesian::default();
+        Self::new(bez, cart, Scene::Bezier)
     }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         match &mut self.scene {
-            AppScene::Bezier(bezier) => {
-                bezier.update(ctx);
+            Scene::Bezier => {
+                self.bezier.update(ctx);
             }
-            AppScene::Cartesian(cartesian) => {
-                cartesian.update(ctx);
+            Scene::Cartesian => {
+                self.cartesian.update(ctx);
             }
         }
 
-        ctx.input(|i| {
-            if i.key_pressed(Key::ArrowLeft) || i.key_pressed(Key::ArrowRight) {
-                self.scene = match self.scene {
-                    AppScene::Bezier(_) => AppScene::Cartesian(cartesian::Cartesian::default()),
-                    AppScene::Cartesian(_) => AppScene::Bezier(bezier::BezierCurve::default()),
-                };
-            }
-        });
+        if self.cartesian.switch {
+            self.scene = Scene::Bezier;
+            self.cartesian.switch = false;
+        } else if self.bezier.switch {
+            self.scene = Scene::Cartesian;
+            self.bezier.switch = false;
+        }
     }
 }
