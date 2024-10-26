@@ -10,6 +10,7 @@ pub struct BezierCurve {
     pan: Pos2,
     lines_on: bool,
     points_on: bool,
+    pub switch: bool,
 }
 
 impl BezierCurve {
@@ -23,6 +24,8 @@ impl BezierCurve {
                         ui.color_edit_button_srgba(&mut self.line_color);
                         ui.label("Color of the Control Points:");
                         ui.color_edit_button_srgba(&mut self.point_color);
+                    });
+                    ui.vertical(|ui| {
                         ui.label("Color of the Lines:");
                         ui.color_edit_button_srgba(&mut self.lines_color);
                     });
@@ -123,7 +126,15 @@ impl BezierCurve {
                         {
                             self.points_on = !self.points_on;
                         }
-                    })
+
+                        if ui
+                            .add_sized([100.0, 10.0], egui::Button::new("Cartesian"))
+                            .on_hover_text("Switch to the Cartesian graph.")
+                            .clicked()
+                        {
+                            self.switch = true;
+                        }
+                    });
                 });
             });
         });
@@ -196,6 +207,7 @@ impl Default for BezierCurve {
             pan: Pos2::ZERO,
             lines_on: true,
             points_on: true,
+            switch: false,
         }
     }
 }

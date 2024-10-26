@@ -1,8 +1,6 @@
 mod bezier;
 mod cartesian;
 
-use eframe::egui::Key;
-
 enum Scene {
     Bezier,
     Cartesian,
@@ -43,13 +41,12 @@ impl eframe::App for App {
             }
         }
 
-        ctx.input(|i| {
-            if i.key_pressed(Key::ArrowLeft) || i.key_pressed(Key::ArrowRight) {
-                self.scene = match self.scene {
-                    Scene::Bezier => Scene::Cartesian,
-                    Scene::Cartesian => Scene::Bezier,
-                };
-            }
-        });
+        if self.cartesian.switch {
+            self.scene = Scene::Bezier;
+            self.cartesian.switch = false;
+        } else if self.bezier.switch {
+            self.scene = Scene::Cartesian;
+            self.bezier.switch = false;
+        }
     }
 }

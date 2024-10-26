@@ -1,6 +1,6 @@
 use eframe::egui::{self, Color32, Pos2};
+use exmex::prelude::*;
 
-#[allow(dead_code)]
 pub struct Cartesian {
     expression: String,
     zoom: f32,
@@ -8,14 +8,52 @@ pub struct Cartesian {
     axis_color: Color32,
     grid_color: Color32,
     function_color: Color32,
+    pub switch: bool,
 }
 
 impl Cartesian {
     pub fn update(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("controls").show(ctx, |ui| {
             ui.group(|ui| {
-                ui.label("Expression:");
-                ui.text_edit_singleline(&mut self.expression);
+                ui.set_height(45.0);
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.vertical(|ui| {
+                        ui.set_width(200.0);
+                        ui.label("Expression:");
+                        ui.text_edit_singleline(&mut self.expression);
+                    });
+
+                    ui.separator();
+
+                    ui.vertical(|ui| {
+                        ui.label("Axis color:");
+                        ui.color_edit_button_srgba(&mut self.axis_color);
+                    });
+
+                    ui.separator();
+
+                    ui.vertical(|ui| {
+                        ui.label("Grid color:");
+                        ui.color_edit_button_srgba(&mut self.grid_color);
+                    });
+
+                    ui.separator();
+
+                    ui.vertical(|ui| {
+                        ui.label("Function color:");
+                        ui.color_edit_button_srgba(&mut self.function_color);
+                    });
+
+                    ui.separator();
+
+                    if ui
+                        .add_sized([100.0, 10.0], egui::Button::new("Bezier"))
+                        .on_hover_text("Switch to Bezier curve")
+                        .clicked()
+                    {
+                        self.switch = true;
+                    }
+                });
             });
         });
 
@@ -28,6 +66,7 @@ impl Cartesian {
             });
 
             self.draw_grid(ui, rect);
+            self.draw_function(ui, rect);
         });
     }
 
@@ -68,6 +107,44 @@ impl Cartesian {
             egui::Stroke::new(2.0, self.axis_color),
         );
     }
+
+    fn draw_function(&self, ui: &mut egui::Ui, rect: egui::Rect) {
+        let center_x = rect.center().x;
+        let center_y = rect.center().y;
+        let grid_unit = 40.0;
+
+        let start_x = rect.left();
+        let end_x = rect.right();
+
+        let mut last_pos = None;
+
+        for screen_x in (start_x as i32)..(end_x as i32) {
+            let world_x = ((screen_x as f32 - center_x - self.pan.x) / self.zoom) / grid_unit;
+
+            if let Some(world_y) = self.evaluate_expression(world_x as f64) {
+                let screen_y = center_y - (world_y as f32 * self.zoom * grid_unit - self.pan.y);
+                let pos = Pos2::new(screen_x as f32, screen_y);
+
+                if let Some(last) = last_pos {
+                    ui.painter()
+                        .line_segment([last, pos], egui::Stroke::new(1.0, self.function_color));
+                }
+
+                last_pos = Some(pos);
+            } else {
+                last_pos = None;
+            }
+        }
+    }
+
+    fn evaluate_expression(&self, x: f64) -> Option<f64> {
+        let expr = exmex::parse::<f64>(&self.expression).ok()?;
+        if let Ok(result) = expr.eval(&[x]) {
+            Some(result)
+        } else {
+            None
+        }
+    }
 }
 
 impl Default for Cartesian {
@@ -79,6 +156,7 @@ impl Default for Cartesian {
             axis_color: Color32::WHITE,
             grid_color: Color32::from_gray(100),
             function_color: Color32::WHITE,
+            switch: false,
         }
     }
 }
