@@ -4,9 +4,12 @@ pub struct BezierCurve {
     points: Vec<Pos2>,
     line_color: Color32,
     point_color: Color32,
+    lines_color: Color32,
     selected_point: Option<usize>,
     zoom: f32,
     pan: Pos2,
+    lines_on: bool,
+    points_on: bool,
 }
 
 impl BezierCurve {
@@ -20,12 +23,18 @@ impl BezierCurve {
                         ui.color_edit_button_srgba(&mut self.line_color);
                         ui.label("Color of the Control Points:");
                         ui.color_edit_button_srgba(&mut self.point_color);
+                        ui.label("Color of the Lines:");
+                        ui.color_edit_button_srgba(&mut self.lines_color);
                     });
 
                     ui.separator();
 
                     ui.vertical(|ui| {
-                        if ui.add_sized([45.0, 10.0], egui::Button::new("+")).clicked() {
+                        if ui
+                            .add_sized([45.0, 10.0], egui::Button::new("+"))
+                            .on_hover_text("Add a line segment")
+                            .clicked()
+                        {
                             let half_diff = (self.points[self.points.len() - 1]
                                 - self.points[self.points.len() - 2])
                                 / 2.0;
@@ -38,7 +47,11 @@ impl BezierCurve {
                             self.points.push(p1);
                         }
 
-                        if ui.add_sized([45.0, 10.0], egui::Button::new("-")).clicked() {
+                        if ui
+                            .add_sized([45.0, 10.0], egui::Button::new("-"))
+                            .on_hover_text("Remove last line segment")
+                            .clicked()
+                        {
                             if (self.points.len() - 2) >= 3 {
                                 self.points.pop();
                                 self.points.pop();
@@ -47,6 +60,7 @@ impl BezierCurve {
 
                         if ui
                             .add_sized([45.0, 10.0], egui::Button::new("Reset"))
+                            .on_hover_text("Reset the control points")
                             .clicked()
                         {
                             self.points = vec![
@@ -90,6 +104,26 @@ impl BezierCurve {
                             ui.label("Select a point to edit its coordinates.");
                         }
                     });
+
+                    ui.separator();
+
+                    ui.vertical(|ui| {
+                        if ui
+                            .add_sized([100.0, 10.0], egui::Button::new("Toggle Lines"))
+                            .on_hover_text("Toggle the visibility of the lines.")
+                            .clicked()
+                        {
+                            self.lines_on = !self.lines_on;
+                        }
+
+                        if ui
+                            .add_sized([100.0, 10.0], egui::Button::new("Toggle Points"))
+                            .on_hover_text("Toggle the visibility of the control points.")
+                            .clicked()
+                        {
+                            self.points_on = !self.points_on;
+                        }
+                    })
                 });
             });
         });
@@ -119,13 +153,13 @@ impl BezierCurve {
                     self.points[i + 2].y * self.zoom + self.pan.y,
                 );
 
-                if draggable_point(ui, &mut scaled_p0, self.point_color).clicked() {
+                if draggable_point(ui, &mut scaled_p0, self.point_color, self.points_on).clicked() {
                     self.selected_point = Some(0);
                 }
-                if draggable_point(ui, &mut scaled_p1, self.point_color).clicked() {
+                if draggable_point(ui, &mut scaled_p1, self.point_color, self.points_on).clicked() {
                     self.selected_point = Some(1);
                 }
-                if draggable_point(ui, &mut scaled_p2, self.point_color).clicked() {
+                if draggable_point(ui, &mut scaled_p2, self.point_color, self.points_on).clicked() {
                     self.selected_point = Some(2);
                 }
 
@@ -135,6 +169,11 @@ impl BezierCurve {
                 self.points[i + 1].y = scaled_p1.y / self.zoom - self.pan.y / self.zoom;
                 self.points[i + 2].x = scaled_p2.x / self.zoom - self.pan.x / self.zoom;
                 self.points[i + 2].y = scaled_p2.y / self.zoom - self.pan.y / self.zoom;
+
+                if self.lines_on {
+                    draw_dotted_line(ui, scaled_p0, scaled_p1, self.lines_color);
+                    draw_dotted_line(ui, scaled_p1, scaled_p2, self.lines_color);
+                }
 
                 draw_bezier_curve(ui, scaled_p0, scaled_p1, scaled_p2, self.line_color);
             }
@@ -151,9 +190,12 @@ impl Default for BezierCurve {
             points: vec![p0, p1, p2],
             line_color: Color32::WHITE,
             point_color: Color32::WHITE,
+            lines_color: Color32::WHITE,
             selected_point: None,
             zoom: 1.0,
             pan: Pos2::ZERO,
+            lines_on: true,
+            points_on: true,
         }
     }
 }
@@ -176,7 +218,7 @@ fn draw_bezier_curve(ui: &mut Ui, p0: Pos2, p1: Pos2, p2: Pos2, color: Color32) 
     ui.painter().add(path);
 }
 
-fn draggable_point(ui: &mut Ui, point: &mut Pos2, color: Color32) -> Response {
+fn draggable_point(ui: &mut Ui, point: &mut Pos2, color: Color32, points_on: bool) -> Response {
     let size = 7.0;
     let rect = Rect::from_center_size(*point, egui::vec2(size * 2.0, size * 2.0));
     let response = ui.allocate_rect(rect, Sense::click_and_drag());
@@ -185,6 +227,25 @@ fn draggable_point(ui: &mut Ui, point: &mut Pos2, color: Color32) -> Response {
         *point += response.drag_delta();
     }
 
-    ui.painter().circle_filled(*point, size, color);
+    if points_on {
+        ui.painter().circle_filled(*point, size, color);
+    }
     response
+}
+
+fn draw_dotted_line(ui: &mut Ui, p0: Pos2, p1: Pos2, color: Color32) {
+    let distance = ((p1.x - p0.x).powi(2) + (p1.y - p0.y).powi(2)).sqrt();
+    let num_dots = (distance / 5.0).ceil() as usize;
+    let mut points = Vec::with_capacity(num_dots);
+
+    for i in 0..=num_dots {
+        let t = i as f32 / num_dots as f32;
+        let x = p0.x + t * (p1.x - p0.x);
+        let y = p0.y + t * (p1.y - p0.y);
+        points.push(Pos2::new(x, y));
+    }
+
+    for point in points {
+        ui.painter().circle_filled(point, 2.0, color);
+    }
 }
