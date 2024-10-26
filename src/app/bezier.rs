@@ -15,18 +15,17 @@ impl BezierCurve {
             ui.group(|ui| {
                 ui.set_height(70.0);
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    ui.label("Color of the Curve:");
-                    ui.color_edit_button_srgba(&mut self.line_color);
-
-                    ui.separator();
-
-                    ui.label("Color of the Control Points:");
-                    ui.color_edit_button_srgba(&mut self.point_color);
+                    ui.vertical(|ui| {
+                        ui.label("Color of the Curve:");
+                        ui.color_edit_button_srgba(&mut self.line_color);
+                        ui.label("Color of the Control Points:");
+                        ui.color_edit_button_srgba(&mut self.point_color);
+                    });
 
                     ui.separator();
 
                     ui.vertical(|ui| {
-                        if ui.button("+").clicked() {
+                        if ui.add_sized([45.0, 10.0], egui::Button::new("+")).clicked() {
                             let half_diff = (self.points[self.points.len() - 1]
                                 - self.points[self.points.len() - 2])
                                 / 2.0;
@@ -39,14 +38,17 @@ impl BezierCurve {
                             self.points.push(p1);
                         }
 
-                        if ui.button("-").clicked() {
+                        if ui.add_sized([45.0, 10.0], egui::Button::new("-")).clicked() {
                             if (self.points.len() - 2) >= 3 {
                                 self.points.pop();
                                 self.points.pop();
                             }
                         }
 
-                        if ui.button("Reset").clicked() {
+                        if ui
+                            .add_sized([45.0, 10.0], egui::Button::new("Reset"))
+                            .clicked()
+                        {
                             self.points = vec![
                                 Pos2::new(50.0, 400.0),
                                 Pos2::new(200.0, 200.0),
@@ -60,6 +62,7 @@ impl BezierCurve {
                     ui.separator();
 
                     ui.vertical(|ui| {
+                        ui.set_width(150.0);
                         ui.label("Edit Coordinates of the Control Points:");
 
                         if let Some(point_index) = self.selected_point {
