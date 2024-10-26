@@ -47,6 +47,15 @@ impl Cartesian {
                     ui.separator();
 
                     if ui
+                        .add_sized([100.0, 10.0], egui::Button::new("Reset"))
+                        .on_hover_text("Reset the view")
+                        .clicked()
+                    {
+                        self.zoom = 1.0;
+                        self.pan = Pos2::ZERO;
+                    }
+
+                    if ui
                         .add_sized([100.0, 10.0], egui::Button::new("Bezier"))
                         .on_hover_text("Switch to Bezier curve")
                         .clicked()
