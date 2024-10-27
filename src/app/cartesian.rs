@@ -2,12 +2,12 @@ use eframe::egui::{self, Color32, Pos2};
 use exmex::prelude::*;
 
 pub struct Cartesian {
-    expression: String,
+    functions: Vec<(String, Color32)>,
+    side_bar_open: bool,
     zoom: f32,
     pan: Pos2,
     axis_color: Color32,
     grid_color: Color32,
-    function_color: Color32,
     pub switch: bool,
 }
 
@@ -17,13 +17,15 @@ impl Cartesian {
             ui.group(|ui| {
                 ui.set_height(45.0);
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    ui.vertical(|ui| {
-                        ui.set_width(200.0);
-                        ui.label("Expression:");
-                        ui.text_edit_singleline(&mut self.expression);
-                    });
-
-                    ui.separator();
+                    if !self.side_bar_open {
+                        if ui
+                            .add_sized([100.0, 10.0], egui::Button::new("Open"))
+                            .clicked()
+                        {
+                            self.side_bar_open = true;
+                        }
+                        ui.separator();
+                    }
 
                     ui.vertical(|ui| {
                         ui.label("Axis color:");
@@ -35,13 +37,6 @@ impl Cartesian {
                     ui.vertical(|ui| {
                         ui.label("Grid color:");
                         ui.color_edit_button_srgba(&mut self.grid_color);
-                    });
-
-                    ui.separator();
-
-                    ui.vertical(|ui| {
-                        ui.label("Function color:");
-                        ui.color_edit_button_srgba(&mut self.function_color);
                     });
 
                     ui.separator();
@@ -66,6 +61,44 @@ impl Cartesian {
             });
         });
 
+        if self.side_bar_open {
+            egui::SidePanel::left("functions").show(ctx, |ui| {
+                ui.group(|ui| {
+                    ui.set_width(160.0);
+                    ui.add_sized([100.0, 10.0], egui::Button::new("Close"))
+                        .on_hover_text("Close the side bar")
+                        .clicked()
+                        .then(|| self.side_bar_open = false);
+
+                    ui.separator();
+
+                    ui.label("Functions:");
+
+                    let mut to_remove = None;
+                    for (i, (function, color)) in &mut self.functions.iter_mut().enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.color_edit_button_srgba(color);
+                            ui.text_edit_singleline(function);
+                            if ui
+                                .add_sized([20.0, 20.0], egui::Button::new("X"))
+                                .on_hover_text("Remove function")
+                                .clicked()
+                            {
+                                to_remove = Some(i);
+                            }
+                        });
+                    }
+                    ui.add_sized([100.0, 10.0], egui::Button::new("Add function"))
+                        .on_hover_text("Add a new function")
+                        .clicked()
+                        .then(|| self.functions.push((String::new(), Color32::WHITE)));
+                    if let Some(i) = to_remove {
+                        self.functions.remove(i);
+                    }
+                });
+            });
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             let rect = ui.min_rect();
             self.pan += ui.interact(rect, ui.id(), egui::Sense::drag()).drag_delta();
@@ -81,7 +114,9 @@ impl Cartesian {
             });
 
             self.draw_grid(ui, rect);
-            self.draw_function(ui, rect);
+            for i in 0..self.functions.len() {
+                self.draw_function(ui, rect, i);
+            }
         });
     }
 
@@ -123,7 +158,7 @@ impl Cartesian {
         );
     }
 
-    fn draw_function(&self, ui: &mut egui::Ui, rect: egui::Rect) {
+    fn draw_function(&self, ui: &mut egui::Ui, rect: egui::Rect, i: usize) {
         let center_x = rect.center().x;
         let center_y = rect.center().y;
         let grid_unit = 40.0;
@@ -135,14 +170,13 @@ impl Cartesian {
 
         for screen_x in (start_x as i32)..(end_x as i32) {
             let world_x = ((screen_x as f32 - center_x - self.pan.x) / self.zoom) / grid_unit;
-
-            if let Some(world_y) = self.evaluate_expression(world_x as f64) {
+            if let Some(world_y) = self.evaluate_expression(i, world_x as f64) {
                 let screen_y = center_y - (world_y as f32 * self.zoom * grid_unit - self.pan.y);
                 let pos = Pos2::new(screen_x as f32, screen_y);
 
                 if let Some(last) = last_pos {
                     ui.painter()
-                        .line_segment([last, pos], egui::Stroke::new(1.0, self.function_color));
+                        .line_segment([last, pos], egui::Stroke::new(1.0, self.functions[i].1));
                 }
 
                 last_pos = Some(pos);
@@ -152,8 +186,8 @@ impl Cartesian {
         }
     }
 
-    fn evaluate_expression(&self, x: f64) -> Option<f64> {
-        let expr = exmex::parse::<f64>(&self.expression).ok()?;
+    fn evaluate_expression(&self, i: usize, x: f64) -> Option<f64> {
+        let expr = exmex::parse::<f64>(&self.functions[i].0).ok()?;
         if let Ok(result) = expr.eval(&[x]) {
             Some(result)
         } else {
@@ -165,12 +199,12 @@ impl Cartesian {
 impl Default for Cartesian {
     fn default() -> Self {
         Self {
-            expression: String::new(),
+            functions: vec![(String::new(), Color32::WHITE)],
+            side_bar_open: true,
             zoom: 1.0,
             pan: Pos2::ZERO,
             axis_color: Color32::WHITE,
             grid_color: Color32::from_gray(100),
-            function_color: Color32::WHITE,
             switch: false,
         }
     }
