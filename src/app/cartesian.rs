@@ -76,7 +76,9 @@ impl Cartesian {
 
                     let mut to_remove = None;
                     for (i, (function, color)) in &mut self.functions.iter_mut().enumerate() {
+                        ui.separator();
                         ui.horizontal(|ui| {
+                            ui.set_width(150.0);
                             ui.color_edit_button_srgba(color);
                             ui.text_edit_singleline(function);
                             if ui
@@ -88,6 +90,7 @@ impl Cartesian {
                             }
                         });
                     }
+                    ui.separator();
                     ui.add_sized([100.0, 10.0], egui::Button::new("Add function"))
                         .on_hover_text("Add a new function")
                         .clicked()
@@ -199,7 +202,7 @@ impl Cartesian {
 impl Default for Cartesian {
     fn default() -> Self {
         Self {
-            functions: vec![(String::new(), Color32::WHITE)],
+            functions: vec![],
             side_bar_open: true,
             zoom: 1.0,
             pan: Pos2::ZERO,

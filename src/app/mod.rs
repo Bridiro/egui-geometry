@@ -26,7 +26,7 @@ impl Default for App {
     fn default() -> Self {
         let bez = bezier::BezierCurve::default();
         let cart = cartesian::Cartesian::default();
-        Self::new(bez, cart, Scene::Bezier)
+        Self::new(bez, cart, Scene::Cartesian)
     }
 }
 
