@@ -69,9 +69,15 @@ impl Cartesian {
         egui::CentralPanel::default().show(ctx, |ui| {
             let rect = ui.min_rect();
             self.pan += ui.interact(rect, ui.id(), egui::Sense::drag()).drag_delta();
+            let mouse_pos_before_zoom = ui.input(|i| i.pointer.hover_pos()).unwrap_or_default();
+
             ui.input(|i| {
-                self.zoom *= 1.0 + i.smooth_scroll_delta.y * 0.01;
-                self.zoom = self.zoom.clamp(0.1, 10.0);
+                let zoom_factor = 1.0 + i.smooth_scroll_delta.y * 0.01;
+                let new_zoom = (self.zoom * zoom_factor).clamp(0.1, 10.0);
+
+                let zoom_adjustment = mouse_pos_before_zoom - (rect.center() + self.pan.to_vec2());
+                self.pan += zoom_adjustment * (1.0 - zoom_factor);
+                self.zoom = new_zoom;
             });
 
             self.draw_grid(ui, rect);

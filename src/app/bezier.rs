@@ -146,8 +146,14 @@ impl BezierCurve {
             }
             self.pan += ui.interact(rect, ui.id(), egui::Sense::drag()).drag_delta();
             ui.input(|i| {
+                let mouse_pos = i.pointer.hover_pos().unwrap_or(Pos2::ZERO);
+                let previous_zoom = self.zoom;
+
                 self.zoom *= 1.0 + i.smooth_scroll_delta.y * 0.01;
                 self.zoom = self.zoom.clamp(0.1, 10.0);
+
+                let zoom_factor = self.zoom / previous_zoom;
+                self.pan = mouse_pos - (mouse_pos - self.pan) * zoom_factor;
             });
 
             for i in (0..self.points.len() - 2).step_by(2) {
