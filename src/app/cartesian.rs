@@ -1,5 +1,8 @@
+mod mathenv;
+
 use eframe::egui::{self, Color32, Pos2};
 use exmex::prelude::*;
+use mathenv::MathEnvironment;
 
 pub struct Cartesian {
     functions: Vec<(String, Color32)>,
@@ -9,6 +12,7 @@ pub struct Cartesian {
     axis_color: Color32,
     grid_color: Color32,
     pub switch: bool,
+    environment: MathEnvironment,
 }
 
 impl Cartesian {
@@ -98,6 +102,50 @@ impl Cartesian {
                     if let Some(i) = to_remove {
                         self.functions.remove(i);
                     }
+
+                    let mut points_string = String::new();
+                    for (name, x, y) in &self.environment.points {
+                        points_string.push_str(&format!("{}=({}, {})\n", name, x, y));
+                    }
+
+                    // Casella di testo unica per l’elenco dei punti
+                    ui.separator();
+                    ui.label("Points:");
+                    if ui.text_edit_multiline(&mut points_string).changed() {
+                        // Aggiorna i punti solo se il contenuto della casella cambia
+                        let mut new_points = Vec::new();
+
+                        // Elabora ogni riga separatamente
+                        for line in points_string.lines() {
+                            if let Some((name, coords)) = line.split_once('=') {
+                                if let Some((x_str, y_str)) = coords
+                                    .trim()
+                                    .strip_prefix('(')
+                                    .and_then(|s| s.strip_suffix(')'))
+                                    .and_then(|s| s.split_once(','))
+                                {
+                                    if let (Ok(x), Ok(y)) =
+                                        (x_str.trim().parse(), y_str.trim().parse())
+                                    {
+                                        new_points.push((name.trim().to_string(), x, y));
+                                    }
+                                }
+                            }
+                        }
+
+                        // Aggiorna `environment.points` solo una volta con i nuovi punti
+                        self.environment.points = new_points;
+                    }
+
+                    // Bottone per aggiungere un nuovo punto
+                    if ui
+                        .add_sized([100.0, 10.0], egui::Button::new("Add point"))
+                        .on_hover_text("Add a new point")
+                        .clicked()
+                    {
+                        let new_name = format!("P{}", self.environment.points.len() + 1);
+                        self.environment.add_point(&new_name, 0.0, 0.0);
+                    }
                 });
             });
         }
@@ -119,6 +167,9 @@ impl Cartesian {
             self.draw_grid(ui, rect);
             for i in 0..self.functions.len() {
                 self.draw_function(ui, rect, i);
+            }
+            for (name, _, _) in &self.environment.points {
+                self.draw_point(ui, rect, name);
             }
         });
     }
@@ -189,13 +240,46 @@ impl Cartesian {
         }
     }
 
+    fn draw_point(&self, ui: &mut egui::Ui, rect: egui::Rect, name: &str) {
+        let center_x = rect.center().x;
+        let center_y = rect.center().y;
+        let grid_unit = 40.0;
+
+        let (x, y) = self.environment.get_point(name).unwrap();
+
+        let screen_x = center_x + (x as f32 * self.zoom * grid_unit) + self.pan.x;
+        let screen_y = center_y - (y as f32 * self.zoom * grid_unit) + self.pan.y;
+
+        let pos = Pos2::new(screen_x, screen_y);
+
+        let point_radius = 5.0 * self.zoom;
+
+        ui.painter().circle(
+            pos,
+            point_radius,
+            self.axis_color,
+            egui::Stroke::new(1.0, self.axis_color),
+        );
+        ui.painter().text(
+            pos + Pos2::new(10.0 * self.zoom, 0.0).to_vec2(),
+            egui::Align2::CENTER_CENTER,
+            name,
+            egui::FontId::default(),
+            self.axis_color,
+        );
+    }
+
     fn evaluate_expression(&self, i: usize, x: f64) -> Option<f64> {
-        let expr = exmex::parse::<f64>(&self.functions[i].0).ok()?;
-        if let Ok(result) = expr.eval(&[x]) {
-            Some(result)
-        } else {
-            None
+        let mut expr = self.functions[i].0.clone();
+        for (name, value) in &self.environment.variables {
+            expr = expr.replace(name, &value.to_string());
         }
+        for (name, x, y) in &self.environment.points {
+            expr = expr.replace(&format!("{}.x", name), &x.to_string());
+            expr = expr.replace(&format!("{}.y", name), &y.to_string());
+        }
+        let expr = exmex::parse::<f64>(&self.functions[i].0).ok()?;
+        expr.eval(&[x]).ok()
     }
 }
 
@@ -209,6 +293,7 @@ impl Default for Cartesian {
             axis_color: Color32::WHITE,
             grid_color: Color32::from_gray(100),
             switch: false,
+            environment: MathEnvironment::new(),
         }
     }
 }
