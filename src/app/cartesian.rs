@@ -1,5 +1,10 @@
 use eframe::egui::{self, Color32, Pos2};
-use exmex::{prelude::*, regex};
+use exmex::{lazy_static::lazy_static, prelude::*, regex};
+
+lazy_static! {
+    static ref POINT_REGEX: regex::Regex =
+        regex::Regex::new(r"(\w)\s*=\s*\(([^,]+),\s*([^)]+)\)").unwrap();
+}
 
 pub struct Cartesian {
     inputs: Vec<(String, Color32)>,
@@ -283,10 +288,7 @@ impl Cartesian {
 }
 
 fn parse_point(input: &str) -> Option<(String, f64, f64)> {
-    if let Some(caps) = regex::Regex::new(r"(\w)\s*=\s*\(([^,]+),\s*([^)]+)\)")
-        .unwrap()
-        .captures(input)
-    {
+    if let Some(caps) = POINT_REGEX.captures(input) {
         let name = caps[1].to_string();
         let x = caps[2].parse().ok()?;
         let y = caps[3].parse().ok()?;
