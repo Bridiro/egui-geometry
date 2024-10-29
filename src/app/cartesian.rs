@@ -1,18 +1,14 @@
-mod mathenv;
-
 use eframe::egui::{self, Color32, Pos2};
-use exmex::prelude::*;
-use mathenv::MathEnvironment;
+use exmex::{prelude::*, regex};
 
 pub struct Cartesian {
-    functions: Vec<(String, Color32)>,
+    inputs: Vec<(String, Color32)>,
     side_bar_open: bool,
     zoom: f32,
     pan: Pos2,
     axis_color: Color32,
     grid_color: Color32,
     pub switch: bool,
-    environment: MathEnvironment,
 }
 
 impl Cartesian {
@@ -76,10 +72,10 @@ impl Cartesian {
 
                     ui.separator();
 
-                    ui.label("Functions:");
+                    ui.label("Items:");
 
                     let mut to_remove = None;
-                    for (i, (function, color)) in &mut self.functions.iter_mut().enumerate() {
+                    for (i, (function, color)) in &mut self.inputs.iter_mut().enumerate() {
                         ui.separator();
                         ui.horizontal(|ui| {
                             ui.set_width(150.0);
@@ -87,7 +83,7 @@ impl Cartesian {
                             ui.text_edit_singleline(function);
                             if ui
                                 .add_sized([20.0, 20.0], egui::Button::new("X"))
-                                .on_hover_text("Remove function")
+                                .on_hover_text("Remove item")
                                 .clicked()
                             {
                                 to_remove = Some(i);
@@ -95,14 +91,15 @@ impl Cartesian {
                         });
                     }
                     ui.separator();
-                    ui.add_sized([100.0, 10.0], egui::Button::new("Add function"))
-                        .on_hover_text("Add a new function")
+                    ui.add_sized([100.0, 10.0], egui::Button::new("Add"))
+                        .on_hover_text("Add a new item")
                         .clicked()
-                        .then(|| self.functions.push((String::new(), Color32::WHITE)));
+                        .then(|| self.inputs.push((String::new(), Color32::WHITE)));
                     if let Some(i) = to_remove {
-                        self.functions.remove(i);
+                        self.inputs.remove(i);
                     }
 
+                    /*
                     let mut points_string = String::new();
                     for (name, x, y) in &self.environment.points {
                         points_string.push_str(&format!("{}=({}, {})\n", name, x, y));
@@ -141,6 +138,7 @@ impl Cartesian {
                         let new_name = format!("P{}", self.environment.points.len() + 1);
                         self.environment.add_point(&new_name, 0.0, 0.0);
                     }
+                    */
                 });
             });
         }
@@ -160,11 +158,13 @@ impl Cartesian {
             });
 
             self.draw_grid(ui, rect);
-            for i in 0..self.functions.len() {
-                self.draw_function(ui, rect, i);
-            }
-            for (name, _, _) in &self.environment.points {
-                self.draw_point(ui, rect, name);
+            for i in 0..self.inputs.len() {
+                if let Some(point) = parse_point(&self.inputs[i].0) {
+                    self.draw_point(ui, rect, &point.0, (point.1, point.2), self.inputs[i].1);
+                } else if let Some(_) = parse_variable(&self.inputs[i].0) {
+                } else {
+                    self.draw_function(ui, rect, i);
+                }
             }
         });
     }
@@ -225,7 +225,7 @@ impl Cartesian {
 
                 if let Some(last) = last_pos {
                     ui.painter()
-                        .line_segment([last, pos], egui::Stroke::new(1.0, self.functions[i].1));
+                        .line_segment([last, pos], egui::Stroke::new(1.0, self.inputs[i].1));
                 }
 
                 last_pos = Some(pos);
@@ -235,12 +235,17 @@ impl Cartesian {
         }
     }
 
-    fn draw_point(&self, ui: &mut egui::Ui, rect: egui::Rect, name: &str) {
+    fn draw_point(
+        &self,
+        ui: &mut egui::Ui,
+        rect: egui::Rect,
+        name: &str,
+        (x, y): (f64, f64),
+        color: Color32,
+    ) {
         let center_x = rect.center().x;
         let center_y = rect.center().y;
         let grid_unit = 40.0;
-
-        let (x, y) = self.environment.get_point(name).unwrap();
 
         let screen_x = center_x + (x as f32 * self.zoom * grid_unit) + self.pan.x;
         let screen_y = center_y - (y as f32 * self.zoom * grid_unit) + self.pan.y;
@@ -249,46 +254,66 @@ impl Cartesian {
 
         let point_radius = 5.0 * self.zoom;
 
-        ui.painter().circle(
-            pos,
-            point_radius,
-            self.axis_color,
-            egui::Stroke::new(1.0, self.axis_color),
-        );
+        ui.painter()
+            .circle(pos, point_radius, color, egui::Stroke::new(1.0, color));
         ui.painter().text(
             pos + Pos2::new(10.0 * self.zoom, 0.0).to_vec2(),
             egui::Align2::CENTER_CENTER,
             name,
             egui::FontId::default(),
-            self.axis_color,
+            color,
         );
     }
 
     fn evaluate_expression(&self, i: usize, x: f64) -> Option<f64> {
-        let mut expr = self.functions[i].0.clone();
-        for (name, value) in &self.environment.variables {
-            expr = expr.replace(name, &value.to_string());
+        let mut expr = self.inputs[i].0.clone();
+
+        for (expression, _) in &self.inputs {
+            if let Some((name, value)) = parse_variable(expression) {
+                expr = expr.replace(&name, &value.to_string());
+            } else if let Some((name, px, py)) = parse_point(expression) {
+                expr = expr.replace(&format!("{}.x", name), &px.to_string());
+                expr = expr.replace(&format!("{}.y", name), &py.to_string());
+            }
         }
-        for (name, x, y) in &self.environment.points {
-            expr = expr.replace(&format!("{}.x", name), &x.to_string());
-            expr = expr.replace(&format!("{}.y", name), &y.to_string());
-        }
-        let expr = exmex::parse::<f64>(&self.functions[i].0).ok()?;
+
+        let expr = exmex::parse::<f64>(&expr).ok()?;
         expr.eval(&[x]).ok()
+    }
+}
+
+fn parse_point(input: &str) -> Option<(String, f64, f64)> {
+    if let Some(caps) = regex::Regex::new(r"(\w)\s*=\s*\(([^,]+),\s*([^)]+)\)")
+        .unwrap()
+        .captures(input)
+    {
+        let name = caps[1].to_string();
+        let x = caps[2].parse().ok()?;
+        let y = caps[3].parse().ok()?;
+        Some((name, x, y))
+    } else {
+        None
+    }
+}
+
+fn parse_variable(input: &str) -> Option<(String, f64)> {
+    if let Some(value_str) = input.split_once('=') {
+        Some((value_str.0.into(), value_str.1.parse().ok()?))
+    } else {
+        None
     }
 }
 
 impl Default for Cartesian {
     fn default() -> Self {
         Self {
-            functions: vec![],
+            inputs: vec![],
             side_bar_open: true,
             zoom: 1.0,
             pan: Pos2::ZERO,
             axis_color: Color32::WHITE,
             grid_color: Color32::from_gray(100),
             switch: false,
-            environment: MathEnvironment::new(),
         }
     }
 }
