@@ -108,14 +108,11 @@ impl Cartesian {
                         points_string.push_str(&format!("{}=({}, {})\n", name, x, y));
                     }
 
-                    // Casella di testo unica per l’elenco dei punti
                     ui.separator();
                     ui.label("Points:");
                     if ui.text_edit_multiline(&mut points_string).changed() {
-                        // Aggiorna i punti solo se il contenuto della casella cambia
                         let mut new_points = Vec::new();
 
-                        // Elabora ogni riga separatamente
                         for line in points_string.lines() {
                             if let Some((name, coords)) = line.split_once('=') {
                                 if let Some((x_str, y_str)) = coords
@@ -133,11 +130,9 @@ impl Cartesian {
                             }
                         }
 
-                        // Aggiorna `environment.points` solo una volta con i nuovi punti
                         self.environment.points = new_points;
                     }
 
-                    // Bottone per aggiungere un nuovo punto
                     if ui
                         .add_sized([100.0, 10.0], egui::Button::new("Add point"))
                         .on_hover_text("Add a new point")
