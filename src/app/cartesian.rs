@@ -164,9 +164,9 @@ impl Cartesian {
 
             self.draw_grid(ui, rect);
             for i in 0..self.inputs.len() {
-                if let Some(point) = parse_point(&self.inputs[i].0) {
+                if let Some(point) = self.parse_point(&self.inputs[i].0) {
                     self.draw_point(ui, rect, &point.0, (point.1, point.2), self.inputs[i].1);
-                } else if let Some(_) = parse_variable(&self.inputs[i].0) {
+                } else if let Some(_) = self.parse_variable(&self.inputs[i].0) {
                 } else {
                     self.draw_function(ui, rect, i);
                 }
@@ -274,9 +274,9 @@ impl Cartesian {
         let mut expr = self.inputs[i].0.clone();
 
         for (expression, _) in &self.inputs {
-            if let Some((name, value)) = parse_variable(expression) {
+            if let Some((name, value)) = self.parse_variable(expression) {
                 expr = expr.replace(&name, &value.to_string());
-            } else if let Some((name, px, py)) = parse_point(expression) {
+            } else if let Some((name, px, py)) = self.parse_point(expression) {
                 expr = expr.replace(&format!("{}.x", name), &px.to_string());
                 expr = expr.replace(&format!("{}.y", name), &py.to_string());
             }
@@ -285,24 +285,30 @@ impl Cartesian {
         let expr = exmex::parse::<f64>(&expr).ok()?;
         expr.eval(&[x]).ok()
     }
-}
 
-fn parse_point(input: &str) -> Option<(String, f64, f64)> {
-    if let Some(caps) = POINT_REGEX.captures(input) {
-        let name = caps[1].to_string();
-        let x = caps[2].parse().ok()?;
-        let y = caps[3].parse().ok()?;
-        Some((name, x, y))
-    } else {
-        None
+    fn parse_point(&self, input: &str) -> Option<(String, f64, f64)> {
+        let mut converted = String::new();
+        for (expression, _) in &self.inputs {
+            if let Some((name, value)) = self.parse_variable(expression) {
+                converted = input.to_string().replace(&name, &value.to_string());
+            }
+        }
+        if let Some(caps) = POINT_REGEX.captures(&converted) {
+            let name = caps[1].to_string();
+            let x = caps[2].parse().ok()?;
+            let y = caps[3].parse().ok()?;
+            Some((name, x, y))
+        } else {
+            None
+        }
     }
-}
 
-fn parse_variable(input: &str) -> Option<(String, f64)> {
-    if let Some(value_str) = input.split_once('=') {
-        Some((value_str.0.into(), value_str.1.parse().ok()?))
-    } else {
-        None
+    fn parse_variable(&self, input: &str) -> Option<(String, f64)> {
+        if let Some(value_str) = input.split_once('=') {
+            Some((value_str.0.into(), value_str.1.parse().ok()?))
+        } else {
+            None
+        }
     }
 }
 
