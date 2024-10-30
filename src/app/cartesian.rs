@@ -287,7 +287,7 @@ impl Cartesian {
     }
 
     fn parse_point(&self, input: &str) -> Option<(String, f64, f64)> {
-        let mut converted = String::new();
+        let mut converted = String::from(input);
         for (expression, _) in &self.inputs {
             if let Some((name, value)) = self.parse_variable(expression) {
                 converted = input.to_string().replace(&name, &value.to_string());
