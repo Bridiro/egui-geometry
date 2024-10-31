@@ -4,6 +4,16 @@ use exmex::{lazy_static::lazy_static, prelude::*, regex};
 lazy_static! {
     static ref POINT_REGEX: regex::Regex =
         regex::Regex::new(r"(\w)\s*=\s*\(([^,]+),\s*([^)]+)\)").unwrap();
+    static ref EXPLICIT_REGEX: regex::Regex = regex::Regex::new(r"y\s*=\s*(.+)").unwrap();
+    static ref IMPLICIT_REGEX: regex::Regex = regex::Regex::new(r"(.+)\s*=\s*0").unwrap();
+    static ref PARAMETRIC_REGEX: regex::Regex =
+        regex::Regex::new(r"x\s*\(\s*t\s*\)\s*=\s*(.+),\s*y\s*\(\s*t\s*\)\s*=\s*(.+)").unwrap();
+}
+
+enum FunctionType {
+    Explicit(String),
+    Implicit(String),
+    Parametric { x_func: String, y_func: String },
 }
 
 pub struct Cartesian {
@@ -103,47 +113,6 @@ impl Cartesian {
                     if let Some(i) = to_remove {
                         self.inputs.remove(i);
                     }
-
-                    /*
-                    let mut points_string = String::new();
-                    for (name, x, y) in &self.environment.points {
-                        points_string.push_str(&format!("{}=({}, {})\n", name, x, y));
-                    }
-
-                    ui.separator();
-                    ui.label("Points:");
-                    if ui.text_edit_multiline(&mut points_string).changed() {
-                        let mut new_points = Vec::new();
-
-                        for line in points_string.lines() {
-                            if let Some((name, coords)) = line.split_once('=') {
-                                if let Some((x_str, y_str)) = coords
-                                    .trim()
-                                    .strip_prefix('(')
-                                    .and_then(|s| s.strip_suffix(')'))
-                                    .and_then(|s| s.split_once(','))
-                                {
-                                    if let (Ok(x), Ok(y)) =
-                                        (x_str.trim().parse(), y_str.trim().parse())
-                                    {
-                                        new_points.push((name.trim().to_string(), x, y));
-                                    }
-                                }
-                            }
-                        }
-
-                        self.environment.points = new_points;
-                    }
-
-                    if ui
-                        .add_sized([100.0, 10.0], egui::Button::new("Add point"))
-                        .on_hover_text("Add a new point")
-                        .clicked()
-                    {
-                        let new_name = format!("P{}", self.environment.points.len() + 1);
-                        self.environment.add_point(&new_name, 0.0, 0.0);
-                    }
-                    */
                 });
             });
         }
@@ -164,9 +133,9 @@ impl Cartesian {
 
             self.draw_grid(ui, rect);
             for i in 0..self.inputs.len() {
-                if let Some(point) = self.parse_point(&self.inputs[i].0) {
+                if let Some(point) = self.parse_point(i) {
                     self.draw_point(ui, rect, &point.0, (point.1, point.2), self.inputs[i].1);
-                } else if let Some(_) = self.parse_variable(&self.inputs[i].0) {
+                } else if let Some(_) = self.parse_variable(i) {
                 } else {
                     self.draw_function(ui, rect, i);
                 }
@@ -273,23 +242,40 @@ impl Cartesian {
     fn evaluate_expression(&self, i: usize, x: f64) -> Option<f64> {
         let mut expr = self.inputs[i].0.clone();
 
-        for (expression, _) in &self.inputs {
-            if let Some((name, value)) = self.parse_variable(expression) {
+        for i in 0..self.inputs.len() {
+            if let Some((name, value)) = self.parse_variable(i) {
                 expr = expr.replace(&name, &value.to_string());
-            } else if let Some((name, px, py)) = self.parse_point(expression) {
+            } else if let Some((name, px, py)) = self.parse_point(i) {
                 expr = expr.replace(&format!("{}.x", name), &px.to_string());
                 expr = expr.replace(&format!("{}.y", name), &py.to_string());
             }
         }
 
-        let expr = exmex::parse::<f64>(&expr).ok()?;
-        expr.eval(&[x]).ok()
+        match self.parse_function(&expr)? {
+            FunctionType::Explicit(func) => {
+                let parsed = exmex::parse::<f64>(&func).ok()?;
+                parsed.eval(&[x]).ok()
+            }
+            FunctionType::Implicit(func) => {
+                let parsed = exmex::parse::<f64>(&func).ok()?;
+                parsed.eval(&[x]).ok()
+            }
+            FunctionType::Parametric { x_func, y_func } => {
+                let parsed1 = exmex::parse::<f64>(&x_func).ok()?;
+                let parsed2 = exmex::parse::<f64>(&y_func).ok()?;
+                parsed1
+                    .eval(&[x])
+                    .ok()
+                    .and_then(|x| parsed2.eval(&[x]).ok())
+            }
+        }
     }
 
-    fn parse_point(&self, input: &str) -> Option<(String, f64, f64)> {
+    fn parse_point(&self, i: usize) -> Option<(String, f64, f64)> {
+        let input = &self.inputs[i].0;
         let mut converted = String::from(input);
-        for (expression, _) in &self.inputs {
-            if let Some((name, value)) = self.parse_variable(expression) {
+        for i in 0..self.inputs.len() {
+            if let Some((name, value)) = self.parse_variable(i) {
                 converted = input.to_string().replace(&name, &value.to_string());
             }
         }
@@ -303,9 +289,24 @@ impl Cartesian {
         }
     }
 
-    fn parse_variable(&self, input: &str) -> Option<(String, f64)> {
-        if let Some(value_str) = input.split_once('=') {
+    fn parse_variable(&self, i: usize) -> Option<(String, f64)> {
+        if let Some(value_str) = self.inputs[i].0.split_once('=') {
             Some((value_str.0.into(), value_str.1.parse().ok()?))
+        } else {
+            None
+        }
+    }
+
+    fn parse_function(&self, input: &str) -> Option<FunctionType> {
+        if let Some(caps) = EXPLICIT_REGEX.captures(input) {
+            Some(FunctionType::Explicit(caps[1].to_string()))
+        } else if let Some(caps) = IMPLICIT_REGEX.captures(input) {
+            Some(FunctionType::Implicit(caps[1].to_string()))
+        } else if let Some(caps) = PARAMETRIC_REGEX.captures(input) {
+            Some(FunctionType::Parametric {
+                x_func: caps[1].to_string(),
+                y_func: caps[2].to_string(),
+            })
         } else {
             None
         }
