@@ -10,7 +10,7 @@ pub struct BezierCurve {
     pan: Pos2,
     lines_on: bool,
     points_on: bool,
-    pub switch: bool,
+    pub switch: u8,
 }
 
 impl BezierCurve {
@@ -132,7 +132,15 @@ impl BezierCurve {
                             .on_hover_text("Switch to the Cartesian graph.")
                             .clicked()
                         {
-                            self.switch = true;
+                            self.switch = 1;
+                        }
+
+                        if ui
+                            .add_sized([100.0, 10.0], egui::Button::new("3D Cartesian"))
+                            .on_hover_text("Switch to the 3D Cartesian graph.")
+                            .clicked()
+                        {
+                            self.switch = 2;
                         }
                     });
                 });
@@ -213,7 +221,7 @@ impl Default for BezierCurve {
             pan: Pos2::ZERO,
             lines_on: true,
             points_on: true,
-            switch: false,
+            switch: 0,
         }
     }
 }

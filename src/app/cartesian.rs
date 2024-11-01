@@ -23,7 +23,7 @@ pub struct Cartesian {
     pan: Pos2,
     axis_color: Color32,
     grid_color: Color32,
-    pub switch: bool,
+    pub switch: u8,
 }
 
 impl Cartesian {
@@ -66,11 +66,19 @@ impl Cartesian {
                     }
 
                     if ui
+                        .add_sized([100.0, 10.0], egui::Button::new("3D Cartesian"))
+                        .on_hover_text("Switch to 3D Cartesian graph")
+                        .clicked()
+                    {
+                        self.switch = 2;
+                    }
+
+                    if ui
                         .add_sized([100.0, 10.0], egui::Button::new("Bezier"))
                         .on_hover_text("Switch to Bezier curve")
                         .clicked()
                     {
-                        self.switch = true;
+                        self.switch = 3;
                     }
                 });
             });
@@ -322,7 +330,7 @@ impl Default for Cartesian {
             pan: Pos2::ZERO,
             axis_color: Color32::WHITE,
             grid_color: Color32::from_gray(100),
-            switch: false,
+            switch: 0,
         }
     }
 }
